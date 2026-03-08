@@ -43,22 +43,17 @@ export async function createPlayer(name: string): Promise<Player> {
   return data;
 }
 
-export async function adjustChips(
-  playerId: string,
-  amount: number,
-  type: string,
-  note: string | null
-): Promise<Player> {
+export async function cashOut(playerId: string, amount: number): Promise<Player> {
   const supabase = createServerClient();
 
   const player = await getPlayer(playerId);
   if (!player) throw new Error('Player not found');
-
-  const newChips = Math.max(0, player.chips + amount);
+  if (player.is_playing) throw new Error('Player is already in a game');
+  if (amount > player.chips) throw new Error('Not enough chips in bank');
 
   const { data, error } = await supabase
     .from('players')
-    .update({ chips: newChips })
+    .update({ chips: player.chips - amount, is_playing: true })
     .eq('id', playerId)
     .select()
     .single();
@@ -66,9 +61,34 @@ export async function adjustChips(
 
   await supabase.from('transactions').insert({
     player_id: playerId,
-    amount,
-    type,
-    note,
+    amount: -amount,
+    type: 'cash_out',
+    note: null,
+  });
+
+  return data;
+}
+
+export async function cashIn(playerId: string, chipsReturned: number): Promise<Player> {
+  const supabase = createServerClient();
+
+  const player = await getPlayer(playerId);
+  if (!player) throw new Error('Player not found');
+  if (!player.is_playing) throw new Error('Player is not currently in a game');
+
+  const { data, error } = await supabase
+    .from('players')
+    .update({ chips: player.chips + chipsReturned, is_playing: false })
+    .eq('id', playerId)
+    .select()
+    .single();
+  if (error) throw error;
+
+  await supabase.from('transactions').insert({
+    player_id: playerId,
+    amount: chipsReturned,
+    type: 'cash_in',
+    note: chipsReturned === 0 ? 'Bust — walked away with nothing' : null,
   });
 
   return data;

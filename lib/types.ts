@@ -4,6 +4,7 @@ export interface Player {
   chips: number;
   revived_count: number;
   is_active: boolean;
+  is_playing: boolean;
   created_at: string;
 }
 
@@ -19,11 +20,9 @@ export interface Transaction {
 
 export type TransactionType =
   | 'initial'
-  | 'adjustment'
   | 'revival'
-  | 'wager_win'
-  | 'wager_loss'
-  | 'barter';
+  | 'cash_out'
+  | 'cash_in';
 
 export interface FunStats {
   luckyOne: { player: Player; netGain: number } | null;

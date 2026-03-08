@@ -4,43 +4,53 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Player } from '@/lib/types';
 
-const TRANSACTION_TYPES = [
-  { value: 'adjustment', label: 'Manual Adjustment' },
-  { value: 'wager_win', label: 'Wager Win' },
-  { value: 'wager_loss', label: 'Wager Loss' },
-  { value: 'barter', label: 'Barter' },
-];
+const PRESETS = [5, 10, 20, 50];
 
 export default function AdjustPanel({ player }: { player: Player }) {
   const [amount, setAmount] = useState('');
-  const [type, setType] = useState('adjustment');
-  const [note, setNote] = useState('');
   const [reviveChips, setReviveChips] = useState(5);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
 
-  const isZero = player.chips === 0;
+  const isBust = player.chips === 0 && !player.is_playing;
 
-  async function handleAdjust(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleCashOut() {
     const n = parseInt(amount);
-    if (isNaN(n) || n === 0) { setError('Enter a non-zero amount'); return; }
+    if (!n || n <= 0) { setError('Enter a valid amount'); return; }
     setLoading(true);
     setError('');
-
-    const res = await fetch(`/api/players/${player.id}`, {
-      method: 'PATCH',
+    const res = await fetch(`/api/players/${player.id}/cash-out`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount: n, type, note: note || null }),
+      body: JSON.stringify({ amount: n }),
     });
-
     if (res.ok) {
       setAmount('');
-      setNote('');
       router.refresh();
     } else {
-      setError('Failed to adjust chips');
+      const data = await res.json();
+      setError(data.error ?? 'Failed to cash out');
+    }
+    setLoading(false);
+  }
+
+  async function handleCashIn(chipsReturned?: number) {
+    const n = chipsReturned ?? parseInt(amount);
+    if (isNaN(n) || n < 0) { setError('Enter a valid amount'); return; }
+    setLoading(true);
+    setError('');
+    const res = await fetch(`/api/players/${player.id}/cash-in`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount: n }),
+    });
+    if (res.ok) {
+      setAmount('');
+      router.refresh();
+    } else {
+      const data = await res.json();
+      setError(data.error ?? 'Failed to cash in');
     }
     setLoading(false);
   }
@@ -49,13 +59,11 @@ export default function AdjustPanel({ player }: { player: Player }) {
     e.preventDefault();
     setLoading(true);
     setError('');
-
     const res = await fetch(`/api/players/${player.id}/revive`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chips: reviveChips }),
     });
-
     if (res.ok) {
       router.refresh();
     } else {
@@ -66,7 +74,7 @@ export default function AdjustPanel({ player }: { player: Player }) {
 
   return (
     <div className="space-y-4">
-      {isZero && (
+      {isBust && (
         <div className="bg-red-950/40 border border-red-800 rounded-2xl p-5">
           <h2 className="font-bold text-red-300 mb-3">🧹 Player is Bust — Revive?</h2>
           <p className="text-sm text-slate-400 mb-4">
@@ -96,72 +104,88 @@ export default function AdjustPanel({ player }: { player: Player }) {
         </div>
       )}
 
-      <div className="bg-[#1e293b] rounded-2xl p-5">
-        <h2 className="font-bold mb-4">Adjust Chips</h2>
-        <form onSubmit={handleAdjust} className="space-y-3">
-          <div className="flex gap-2">
-            {[-5, -3, -1, 1, 3, 5].map((v) => (
+      {player.is_playing ? (
+        <div className="bg-[#1e293b] rounded-2xl p-5">
+          <h2 className="font-bold mb-1">💰 Cash In</h2>
+          <p className="text-sm text-slate-400 mb-4">
+            How many chips is the player returning from this session?
+          </p>
+          <div className="flex gap-2 flex-wrap mb-3">
+            <button
+              onClick={() => handleCashIn(0)}
+              disabled={loading}
+              className="px-3 py-2 rounded-lg text-sm font-bold bg-red-900/50 hover:bg-red-800/50 text-red-300 transition-colors disabled:opacity-50"
+            >
+              Bust (0)
+            </button>
+            {PRESETS.map((p) => (
               <button
-                key={v}
-                type="button"
-                onClick={() => setAmount(String(v))}
-                className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${
-                  v < 0
-                    ? 'bg-red-900/50 hover:bg-red-800/50 text-red-300'
-                    : 'bg-green-900/50 hover:bg-green-800/50 text-green-300'
-                } ${amount === String(v) ? 'ring-2 ring-amber-400' : ''}`}
+                key={p}
+                onClick={() => setAmount(String(p))}
+                disabled={loading}
+                className={`px-3 py-2 rounded-lg text-sm font-bold bg-slate-700 hover:bg-slate-600 text-white transition-colors disabled:opacity-50 ${amount === String(p) ? 'ring-2 ring-amber-400' : ''}`}
               >
-                {v > 0 ? '+' : ''}{v}
+                {p}
               </button>
             ))}
           </div>
-
-          <div>
-            <label className="text-xs text-slate-400 block mb-1">Or enter custom amount</label>
+          <div className="flex gap-2">
             <input
               type="number"
+              min={0}
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder="e.g. -3 or +7"
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-400"
+              placeholder="Custom amount"
+              className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-400"
             />
-          </div>
-
-          <div>
-            <label className="text-xs text-slate-400 block mb-1">Type</label>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-400"
+            <button
+              onClick={() => handleCashIn()}
+              disabled={loading}
+              className="bg-amber-400 hover:bg-amber-300 text-black font-bold px-5 py-2.5 rounded-lg transition-colors disabled:opacity-50"
             >
-              {TRANSACTION_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
+              {loading ? 'Saving...' : 'Cash In'}
+            </button>
           </div>
-
-          <div>
-            <label className="text-xs text-slate-400 block mb-1">Note (optional)</label>
+        </div>
+      ) : !isBust && (
+        <div className="bg-[#1e293b] rounded-2xl p-5">
+          <h2 className="font-bold mb-1">🎰 Cash Out</h2>
+          <p className="text-sm text-slate-400 mb-4">
+            Issue chips from the bank for this session.
+          </p>
+          <div className="flex gap-2 flex-wrap mb-3">
+            {PRESETS.map((p) => (
+              <button
+                key={p}
+                onClick={() => setAmount(String(p))}
+                disabled={loading}
+                className={`px-3 py-2 rounded-lg text-sm font-bold bg-slate-700 hover:bg-slate-600 text-white transition-colors disabled:opacity-50 ${amount === String(p) ? 'ring-2 ring-amber-400' : ''}`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
             <input
-              type="text"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="e.g. Lost at blackjack"
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-400"
+              type="number"
+              min={1}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="Custom amount"
+              className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-400"
             />
+            <button
+              onClick={handleCashOut}
+              disabled={loading}
+              className="bg-amber-400 hover:bg-amber-300 text-black font-bold px-5 py-2.5 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {loading ? 'Saving...' : 'Cash Out'}
+            </button>
           </div>
+        </div>
+      )}
 
-          {error && <p className="text-red-400 text-sm">{error}</p>}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-amber-400 hover:bg-amber-300 text-black font-bold py-2.5 rounded-lg transition-colors disabled:opacity-50"
-          >
-            {loading ? 'Saving...' : 'Apply Adjustment'}
-          </button>
-        </form>
-      </div>
+      {error && <p className="text-red-400 text-sm">{error}</p>}
     </div>
   );
 }

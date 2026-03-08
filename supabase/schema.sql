@@ -8,6 +8,7 @@ create table if not exists players (
   chips integer not null default 10,
   revived_count integer not null default 0,
   is_active boolean not null default true,
+  is_playing boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -17,7 +18,7 @@ create table if not exists transactions (
   player_id uuid not null references players(id) on delete cascade,
   amount integer not null,
   note text,
-  type text not null check (type in ('initial','adjustment','revival','wager_win','wager_loss','barter')),
+  type text not null check (type in ('initial','revival','cash_out','cash_in')),
   created_at timestamptz not null default now()
 );
 
@@ -55,3 +56,14 @@ create policy "Public can read transactions"
 -- create policy "Service role can write transactions"
 --   on transactions for all
 --   using (auth.role() = 'service_role');
+
+-- ============================================================
+-- MIGRATION: Run these if upgrading an existing database
+-- (Skip if creating fresh from this schema)
+-- ============================================================
+
+-- alter table players add column if not exists is_playing boolean not null default false;
+
+-- alter table transactions drop constraint if exists transactions_type_check;
+-- alter table transactions add constraint transactions_type_check
+--   check (type in ('initial','revival','cash_out','cash_in'));
