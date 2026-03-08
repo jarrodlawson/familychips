@@ -41,7 +41,7 @@ export default function StatsPanel({ stats }: Props) {
       emoji: '🎰',
       title: 'The Addict',
       name: stats.addict.player.name,
-      detail: `${stats.addict.count} transactions and counting`,
+      detail: `${stats.addict.count} chip movements and counting`,
     });
   }
 
@@ -50,7 +50,7 @@ export default function StatsPanel({ stats }: Props) {
       emoji: '🏦',
       title: 'The Miser',
       name: stats.miser.player.name,
-      detail: `Only ${stats.miser.count} transactions — plays it safe`,
+      detail: `Only ${stats.miser.count} chip movements — plays it safe`,
     });
   }
 
@@ -81,16 +81,53 @@ export default function StatsPanel({ stats }: Props) {
     });
   }
 
-  if (cards.length === 0) return null;
+  if (stats.mostSessions) {
+    cards.push({
+      emoji: '🎦',
+      title: 'Most Sessions',
+      name: stats.mostSessions.player.name,
+      detail: `${stats.mostSessions.sessionCount} session${stats.mostSessions.sessionCount > 1 ? 's' : ''} played`,
+    });
+  }
+
+  if (stats.highRoller) {
+    cards.push({
+      emoji: '🎲',
+      title: 'High Roller',
+      name: stats.highRoller.player.name,
+      detail: `Put up ${stats.highRoller.biggestStake} chips in one session`,
+    });
+  }
+
+  if (stats.bestReturns) {
+    const pct = Math.round(stats.bestReturns.ratio * 100);
+    cards.push({
+      emoji: '📈',
+      title: 'Best Returns',
+      name: stats.bestReturns.player.name,
+      detail: `${pct}% return rate on chips`,
+    });
+  }
+
+  if (cards.length === 0 && stats.currentlyPlaying === 0) return null;
 
   return (
     <div>
-      <h2 className="text-lg font-bold mb-3 text-slate-300">Fun Stats</h2>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        {cards.map((card) => (
-          <StatCard key={card.title} {...card} />
-        ))}
-      </div>
+      {stats.currentlyPlaying > 0 && (
+        <p className="text-sm text-amber-400/80 mb-4">
+          🎮 {stats.currentlyPlaying} player{stats.currentlyPlaying > 1 ? 's' : ''} currently in a session
+        </p>
+      )}
+      {cards.length > 0 && (
+        <>
+          <h2 className="text-lg font-bold mb-3 text-slate-300">Fun Stats</h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {cards.map((card) => (
+              <StatCard key={card.title} {...card} />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

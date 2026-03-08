@@ -31,12 +31,22 @@ export default function Leaderboard({ initialPlayers }: Props) {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  const maxChips = Math.max(...players.map((p) => p.chips), 10);
+  // Sort: Playing first → Normal → Bust, then chips DESC within group
+  const sorted = [...players].sort((a, b) => {
+    const aBust = a.chips === 0 && !a.is_playing;
+    const bBust = b.chips === 0 && !b.is_playing;
+    if (a.is_playing !== b.is_playing) return a.is_playing ? -1 : 1;
+    if (aBust !== bBust) return aBust ? 1 : -1;
+    return b.chips - a.chips;
+  });
+
+  const maxChips = Math.max(...sorted.map((p) => p.chips), 10);
 
   return (
     <div className="space-y-3">
-      {players.map((player, i) => {
-        const isZero = player.chips === 0;
+      {sorted.map((player, i) => {
+        const isBust = player.chips === 0 && !player.is_playing;
+        const isPlaying = player.is_playing;
         const pct = Math.round((player.chips / maxChips) * 100);
         const rank = i + 1;
         const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
@@ -44,21 +54,34 @@ export default function Leaderboard({ initialPlayers }: Props) {
         return (
           <div
             key={player.id}
-            className={`rounded-xl p-4 ${isZero ? 'opacity-60 border border-red-800 bg-red-950/30' : 'bg-[#1e293b]'}`}
+            className={`rounded-xl p-4 ${
+              isBust
+                ? 'opacity-60 border border-red-800 bg-red-950/30'
+                : isPlaying
+                  ? 'bg-[#1e293b] border border-amber-400/30'
+                  : 'bg-[#1e293b]'
+            }`}
           >
             <div className="flex items-center gap-4">
               <span className="text-2xl w-10 text-center shrink-0">{medal}</span>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="font-semibold text-lg truncate">{player.name}</span>
-                  <span className={`font-bold text-xl shrink-0 ml-2 ${isZero ? 'text-red-400' : 'text-amber-400'}`}>
-                    {isZero ? '🧹 Doing Chores' : `${player.chips} 🪙`}
+                  <div>
+                    <span className="font-semibold text-lg truncate">{player.name}</span>
+                    {isPlaying && (
+                      <div className="text-xs text-amber-400/70">🎲 In a session</div>
+                    )}
+                  </div>
+                  <span className={`font-bold text-xl shrink-0 ml-2 ${isBust ? 'text-red-400' : 'text-amber-400'}`}>
+                    {isBust ? '🧹 Doing Chores' : `${player.chips} 🪙`}
                   </span>
                 </div>
                 <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all duration-500 ${isZero ? 'bg-red-600' : 'bg-amber-400'}`}
-                    style={{ width: `${isZero ? 2 : pct}%` }}
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      isBust ? 'bg-red-600' : isPlaying ? 'bg-indigo-400' : 'bg-amber-400'
+                    }`}
+                    style={{ width: `${isBust ? 2 : pct}%` }}
                   />
                 </div>
               </div>

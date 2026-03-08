@@ -31,10 +31,17 @@ export interface FunStats {
   mostBroke: { player: Player; revivedCount: number } | null;
   bigSpender: { player: Player; biggestLoss: number } | null;
   comebackKid: { player: Player } | null;
+  mostSessions: { player: Player; sessionCount: number } | null;
+  highRoller: { player: Player; biggestStake: number } | null;
+  bestReturns: { player: Player; ratio: number } | null;
+  currentlyPlaying: number;
 }
 
 export interface PlayerWithStats extends Player {
   transactionCount: number;
   netGain: number;
   biggestLoss: number;
+  sessionCount: number;
+  biggestStake: number;
+  returnsRatio: number;
 }

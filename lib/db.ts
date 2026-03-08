@@ -168,11 +168,25 @@ export async function getPlayersWithStats(): Promise<PlayerWithStats[]> {
     const biggestLoss = playerTx
       .filter((t) => t.amount < 0)
       .reduce((min, t) => Math.min(min, t.amount), 0);
+
+    const cashOuts = playerTx.filter((t) => t.type === 'cash_out');
+    const cashIns = playerTx.filter((t) => t.type === 'cash_in');
+    const sessionCount = cashOuts.length;
+    const biggestStake = cashOuts.length > 0
+      ? Math.max(...cashOuts.map((t) => Math.abs(t.amount)))
+      : 0;
+    const totalOut = cashOuts.reduce((s, t) => s + Math.abs(t.amount), 0);
+    const totalIn = cashIns.reduce((s, t) => s + t.amount, 0);
+    const returnsRatio = totalOut > 0 ? totalIn / totalOut : 0;
+
     return {
       ...p,
       transactionCount: playerTx.length,
       netGain,
       biggestLoss,
+      sessionCount,
+      biggestStake,
+      returnsRatio,
     };
   });
 }
@@ -186,6 +200,10 @@ export function computeFunStats(players: PlayerWithStats[]): FunStats {
       mostBroke: null,
       bigSpender: null,
       comebackKid: null,
+      mostSessions: null,
+      highRoller: null,
+      bestReturns: null,
+      currentlyPlaying: 0,
     };
   }
 
@@ -208,6 +226,26 @@ export function computeFunStats(players: PlayerWithStats[]): FunStats {
     ? revivedPlayers.reduce((best, p) => (p.chips > best.chips ? p : best))
     : null;
 
+  const currentlyPlaying = players.filter((p) => p.is_playing).length;
+
+  const bySessionCount = [...players].sort((a, b) => b.sessionCount - a.sessionCount);
+  const topSessions = bySessionCount[0];
+  const mostSessions = topSessions && topSessions.sessionCount > 0
+    ? { player: topSessions, sessionCount: topSessions.sessionCount }
+    : null;
+
+  const byStake = [...players].sort((a, b) => b.biggestStake - a.biggestStake);
+  const topStake = byStake[0];
+  const highRoller = topStake && topStake.biggestStake > 0
+    ? { player: topStake, biggestStake: topStake.biggestStake }
+    : null;
+
+  const qualified = players.filter((p) => p.sessionCount > 0);
+  const byReturns = [...qualified].sort((a, b) => b.returnsRatio - a.returnsRatio);
+  const bestReturns = byReturns[0]
+    ? { player: byReturns[0], ratio: byReturns[0].returnsRatio }
+    : null;
+
   return {
     luckyOne: luckyOne ? { player: luckyOne, netGain: luckyOne.netGain } : null,
     addict: addict ? { player: addict, count: addict.transactionCount } : null,
@@ -219,5 +257,9 @@ export function computeFunStats(players: PlayerWithStats[]): FunStats {
       ? { player: bigSpender, biggestLoss: Math.abs(bigSpender.biggestLoss) }
       : null,
     comebackKid: comebackKid ? { player: comebackKid } : null,
+    mostSessions,
+    highRoller,
+    bestReturns,
+    currentlyPlaying,
   };
 }
